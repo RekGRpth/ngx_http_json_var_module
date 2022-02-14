@@ -1,4 +1,3 @@
-#include <ndk.h>
 #include <ngx_http.h>
 
 ngx_module_t ngx_http_json_var_module;
