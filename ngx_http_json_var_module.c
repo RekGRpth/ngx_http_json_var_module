@@ -16,11 +16,6 @@ typedef struct {
 } ngx_http_json_var_ctx_t;
 
 typedef struct {
-    ngx_uint_t index;
-    ngx_uint_t nelts;
-} ngx_http_json_var_var_index_nelts_t;
-
-typedef struct {
     ngx_http_complex_value_t cv;
     ngx_str_t command;
     ngx_str_t name;
