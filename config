@@ -1,0 +1,32 @@
+if test -n "$ngx_module_link"; then
+    if test -n "$NDK_SRCS"; then
+        echo "found ngx_devel_kit for ngx_encrypted_session; looks good."
+    else
+        echo "error: ngx_devel_kit is required to build ngx_encrypted_session; please put it before ngx_http_json_var_module." 1>&2
+        exit 1
+    fi
+else
+    if echo $HTTP_MODULES | grep " ndk_http_module" > /dev/null; then
+        echo "found ngx_devel_kit for ngx_encrypted_session; looks good."
+    else
+        echo "error: ngx_devel_kit is required to build ngx_encrypted_session; please put it before ngx_http_json_var_module." 1>&2
+        exit 1
+    fi
+fi
+
+ngx_addon_name=ngx_http_json_var_module
+if test -n "$ngx_module_link"; then
+    ngx_module_type=HTTP
+    ngx_module_name=$ngx_addon_name
+    ngx_module_incs=
+    ngx_module_deps=
+    ngx_module_srcs="$ngx_addon_dir/ngx_http_json_var_module.c"
+    ngx_module_libs=
+
+    . auto/module
+else
+HTTP_MODULES="$HTTP_MODULES $ngx_addon_name"
+NGX_ADDON_SRCS="$ngx_addon_dir/ngx_http_json_var_module.c"
+fi
+
+CFLAGS="$CFLAGS -DNDK_SET_VAR"
