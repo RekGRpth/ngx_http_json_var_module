@@ -17,7 +17,6 @@ typedef struct {
 
 typedef struct {
     ngx_http_complex_value_t cv;
-    ngx_str_t command;
     ngx_str_t name;
     ngx_uint_t index;
     ngx_uint_t json;
