@@ -497,7 +497,7 @@ static ngx_int_t ngx_http_json_var_get_handler(ngx_http_request_t *r, ngx_http_v
     return NGX_OK;
 }
 
-static char *ngx_http_json_var_var_conf_handler(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+static char *ngx_http_json_var_conf_handler(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_str_t *args = cf->args->elts;
     if (cf->args->nelts != 2) return "cf->args->nelts != 2";
     ngx_http_json_var_conf_ctx_t *ctx = cf->ctx;
@@ -517,7 +517,7 @@ static char *ngx_http_json_var_var_conf_handler(ngx_conf_t *cf, ngx_command_t *c
     return NGX_CONF_OK;
 }
 
-static char *ngx_http_json_var_var_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+static char *ngx_http_json_var_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_str_t *args = cf->args->elts;
     ngx_str_t name = args[1];
     if (name.data[0] != '$') return "invalid variable name";
@@ -536,7 +536,7 @@ static char *ngx_http_json_var_var_conf(ngx_conf_t *cf, ngx_command_t *cmd, void
         .fields = fields,
     };
     cf->ctx = &ctx;
-    cf->handler = ngx_http_json_var_var_conf_handler;
+    cf->handler = ngx_http_json_var_conf_handler;
     char *rv = ngx_conf_parse(cf, NULL);
     *cf = save;
     if (rv != NGX_CONF_OK) return rv;
@@ -546,7 +546,7 @@ static char *ngx_http_json_var_var_conf(ngx_conf_t *cf, ngx_command_t *cmd, void
 static ngx_command_t ngx_http_json_var_commands[] = {
   { .name = ngx_string("json_var"),
     .type = NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_BLOCK|NGX_CONF_TAKE1,
-    .set = ngx_http_json_var_var_conf,
+    .set = ngx_http_json_var_conf,
     .conf = 0,
     .offset = 0,
     .post = NULL },
