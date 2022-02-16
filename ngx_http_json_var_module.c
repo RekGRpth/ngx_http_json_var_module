@@ -26,7 +26,7 @@ typedef struct {
     ngx_array_t *fields;
     ngx_conf_t *cf;
     ngx_http_json_var_loc_conf_t *conf;
-} ngx_http_json_var_var_ctx_t;
+} ngx_http_json_var_conf_ctx_t;
 
 typedef struct {
     ngx_str_t key;
@@ -500,7 +500,7 @@ static ngx_int_t ngx_http_json_var_var_http_handler(ngx_http_request_t *r, ngx_h
 static char *ngx_http_json_var_var_conf_handler(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_str_t *args = cf->args->elts;
     if (cf->args->nelts != 2) return "cf->args->nelts != 2";
-    ngx_http_json_var_var_ctx_t *ctx = cf->ctx;
+    ngx_http_json_var_conf_ctx_t *ctx = cf->ctx;
     ngx_http_json_var_var_field_t *field = ngx_array_push(ctx->fields);
     if (!field) return "!ngx_array_push";
     ngx_str_t value = args[1];
@@ -530,7 +530,7 @@ static char *ngx_http_json_var_var_conf(ngx_conf_t *cf, ngx_command_t *cmd, void
     if (!fields) return "!ngx_array_create";
     var->data = (uintptr_t)fields;
     ngx_conf_t save = *cf;
-    ngx_http_json_var_var_ctx_t ctx = {
+    ngx_http_json_var_conf_ctx_t ctx = {
         .cf = &save,
         .conf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_json_var_module),
         .fields = fields,
