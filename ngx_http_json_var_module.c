@@ -20,7 +20,7 @@ typedef struct {
     ngx_str_t name;
     ngx_uint_t index;
     ngx_uint_t json;
-} ngx_http_json_var_var_field_t;
+} ngx_http_json_var_field_t;
 
 typedef struct {
     ngx_array_t *fields;
@@ -444,7 +444,7 @@ static ngx_int_t ngx_http_json_var_postconfiguration(ngx_conf_t *cf) {
 static size_t ngx_http_json_var_var_len(ngx_http_request_t *r, ngx_array_t *fields) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     size_t len = 0;
-    ngx_http_json_var_var_field_t *args = fields->elts;
+    ngx_http_json_var_field_t *args = fields->elts;
     for (ngx_uint_t i = 0; i < fields->nelts; i++) {
         if (!args[i].name.len) continue;
         ngx_str_t value;
@@ -463,7 +463,7 @@ static u_char *ngx_http_json_var_var_data(ngx_http_request_t *r, u_char *p, ngx_
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     *p++ = '{';
     u_char *var = p;
-    ngx_http_json_var_var_field_t *args = fields->elts;
+    ngx_http_json_var_field_t *args = fields->elts;
     for (ngx_uint_t i = 0; i < fields->nelts; i++) {
         if (!args[i].name.len) continue;
         ngx_str_t value;
@@ -501,7 +501,7 @@ static char *ngx_http_json_var_conf_handler(ngx_conf_t *cf, ngx_command_t *cmd, 
     ngx_str_t *args = cf->args->elts;
     if (cf->args->nelts != 2) return "cf->args->nelts != 2";
     ngx_http_json_var_conf_ctx_t *ctx = cf->ctx;
-    ngx_http_json_var_var_field_t *field = ngx_array_push(ctx->fields);
+    ngx_http_json_var_field_t *field = ngx_array_push(ctx->fields);
     if (!field) return "!ngx_array_push";
     ngx_str_t value = args[1];
     field->json = value.data[0] == '$'
@@ -526,7 +526,7 @@ static char *ngx_http_json_var_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *co
     ngx_http_variable_t *var = ngx_http_add_variable(cf, &name, NGX_HTTP_VAR_NOCACHEABLE|NGX_HTTP_VAR_CHANGEABLE);
     if (!var) return "!ngx_http_add_variable";
     var->get_handler = ngx_http_json_var_get_handler;
-    ngx_array_t *fields = ngx_array_create(cf->pool, 1, sizeof(ngx_http_json_var_var_field_t));
+    ngx_array_t *fields = ngx_array_create(cf->pool, 1, sizeof(ngx_http_json_var_field_t));
     if (!fields) return "!ngx_array_create";
     var->data = (uintptr_t)fields;
     ngx_conf_t save = *cf;
