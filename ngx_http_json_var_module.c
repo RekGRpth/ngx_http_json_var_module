@@ -485,7 +485,7 @@ static u_char *ngx_http_json_var_var_data(ngx_http_request_t *r, u_char *p, ngx_
     return p;
 }
 
-static ngx_int_t ngx_http_json_var_var_http_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
+static ngx_int_t ngx_http_json_var_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_array_t *fields = (ngx_array_t *)data;
     v->len = ngx_http_json_var_var_len(r, fields);
@@ -525,7 +525,7 @@ static char *ngx_http_json_var_var_conf(ngx_conf_t *cf, ngx_command_t *cmd, void
     name.data++;
     ngx_http_variable_t *var = ngx_http_add_variable(cf, &name, NGX_HTTP_VAR_NOCACHEABLE|NGX_HTTP_VAR_CHANGEABLE);
     if (!var) return "!ngx_http_add_variable";
-    var->get_handler = ngx_http_json_var_var_http_handler;
+    var->get_handler = ngx_http_json_var_get_handler;
     ngx_array_t *fields = ngx_array_create(cf->pool, 1, sizeof(ngx_http_json_var_var_field_t));
     if (!fields) return "!ngx_array_create";
     var->data = (uintptr_t)fields;
