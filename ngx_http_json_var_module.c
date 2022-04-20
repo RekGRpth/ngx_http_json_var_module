@@ -248,7 +248,7 @@ static ngx_int_t ngx_http_json_var_get_vars(ngx_http_request_t *r, ngx_http_vari
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_array_t *array = ngx_http_json_var_get_vars_array(r, r->args.data, r->args.data + r->args.len, NULL);
     if (!array) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_json_var_get_vars_array"); return NGX_ERROR; }
-    if (!(v->len = ngx_http_json_var_array_len(r, array))) return NGX_OK;
+    if (!(v->len = ngx_http_json_var_array_len(r, array))) { ngx_str_set(v, "null"); return NGX_OK; }
     v->len += sizeof("{}") - 1;
     if (!(v->data = ngx_pnalloc(r->pool, v->len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
     if (ngx_http_json_var_array_data(r, array, v->data) != v->data + v->len) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_json_var_array_data != v->data + v->len"); return NGX_ERROR; }
