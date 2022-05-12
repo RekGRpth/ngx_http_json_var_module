@@ -3,6 +3,7 @@
 ngx_module_t ngx_http_json_var_module;
 
 typedef struct {
+    ngx_array_t *fields;
     ngx_flag_t enable;
 } ngx_http_json_var_loc_conf_t;
 
@@ -21,12 +22,6 @@ typedef struct {
     ngx_uint_t index;
     ngx_uint_t json;
 } ngx_http_json_var_field_t;
-
-typedef struct {
-    ngx_array_t *fields;
-    ngx_conf_t *cf;
-    ngx_http_json_var_loc_conf_t *conf;
-} ngx_http_json_var_conf_ctx_t;
 
 typedef struct {
     ngx_str_t key;
@@ -91,7 +86,6 @@ static size_t ngx_http_json_var_array_len(ngx_http_request_t *r, ngx_array_t *ar
             } break;
         }
     }
-//    len += sizeof("{}") - 1;
     return len;
 }
 
@@ -487,7 +481,11 @@ static u_char *ngx_http_json_var_data(ngx_http_request_t *r, u_char *p, ngx_arra
 
 static ngx_int_t ngx_http_json_var_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    ngx_array_t *fields = (ngx_array_t *)data;
+    *v = ngx_http_variable_null_value;
+    ngx_http_json_var_loc_conf_t *hjlc = ngx_http_get_module_loc_conf(r, ngx_http_json_var_module);
+    ngx_array_t *fields = hjlc->fields;
+    if (!fields) { ngx_str_set(v, "null"); return NGX_OK; }
+    if (!fields->nelts) { ngx_str_set(v, "{}"); return NGX_OK; }
     v->len = ngx_http_json_var_len(r, fields);
     if (!(v->data = ngx_pnalloc(r->pool, v->len))){ ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
     if (ngx_http_json_var_data(r, v->data, fields) != v->data + v->len) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_json_var_data != v->data + v->len"); return NGX_ERROR; }
@@ -500,8 +498,8 @@ static ngx_int_t ngx_http_json_var_get_handler(ngx_http_request_t *r, ngx_http_v
 static char *ngx_http_json_var_conf_handler(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_str_t *args = cf->args->elts;
     if (cf->args->nelts != 2) return "cf->args->nelts != 2";
-    ngx_http_json_var_conf_ctx_t *ctx = cf->ctx;
-    ngx_http_json_var_field_t *field = ngx_array_push(ctx->fields);
+    ngx_http_json_var_loc_conf_t *hjlc = conf;
+    ngx_http_json_var_field_t *field = ngx_array_push(hjlc->fields);
     if (!field) return "!ngx_array_push";
     ngx_str_t value = args[1];
     field->json = value.data[0] == '$'
@@ -510,14 +508,17 @@ static char *ngx_http_json_var_conf_handler(ngx_conf_t *cf, ngx_command_t *cmd, 
         || (value.len - 1 == sizeof("json_cookies") - 1 && !ngx_strncasecmp(value.data + 1, (u_char *)"json_cookies", sizeof("json_cookies") - 1))
         || (value.len - 1 == sizeof("json_get_vars") - 1 && !ngx_strncasecmp(value.data + 1, (u_char *)"json_get_vars", sizeof("json_get_vars") - 1))
         || (value.len - 1 == sizeof("json_post_vars") - 1 && !ngx_strncasecmp(value.data + 1, (u_char *)"json_post_vars", sizeof("json_post_vars") - 1)));
-    if (value.data[0] == '$' && value.len - 1 == sizeof("json_post_vars") - 1 && !ngx_strncasecmp(value.data + 1, (u_char *)"json_post_vars", sizeof("json_post_vars") - 1)) ctx->conf->enable = 1;
-    ngx_http_compile_complex_value_t ccv = {ctx->cf, &value, &field->cv, 0, 0, 0};
+    if (value.data[0] == '$' && value.len - 1 == sizeof("json_post_vars") - 1 && !ngx_strncasecmp(value.data + 1, (u_char *)"json_post_vars", sizeof("json_post_vars") - 1)) hjlc->enable = 1;
+    ngx_http_compile_complex_value_t ccv = {cf->ctx, &value, &field->cv, 0, 0, 0};
     if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
     field->name = args[0];
     return NGX_CONF_OK;
 }
 
 static char *ngx_http_json_var_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_http_json_var_loc_conf_t *hjlc = conf;
+    if (hjlc->fields) return "is duplicate";
+    if (!(hjlc->fields = ngx_array_create(cf->pool, 1, sizeof(ngx_http_json_var_field_t)))) return "!ngx_array_create";
     ngx_str_t *args = cf->args->elts;
     ngx_str_t name = args[1];
     if (name.data[0] != '$') return "invalid variable name";
@@ -526,30 +527,17 @@ static char *ngx_http_json_var_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *co
     ngx_http_variable_t *var = ngx_http_add_variable(cf, &name, NGX_HTTP_VAR_NOCACHEABLE|NGX_HTTP_VAR_CHANGEABLE);
     if (!var) return "!ngx_http_add_variable";
     var->get_handler = ngx_http_json_var_get_handler;
-    ngx_array_t *fields = ngx_array_create(cf->pool, 1, sizeof(ngx_http_json_var_field_t));
-    if (!fields) return "!ngx_array_create";
-    var->data = (uintptr_t)fields;
     ngx_conf_t save = *cf;
-    ngx_http_json_var_conf_ctx_t ctx = {
-        .cf = &save,
-        .conf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_json_var_module),
-        .fields = fields,
-    };
-    cf->ctx = &ctx;
+    cf->ctx = &save;
     cf->handler = ngx_http_json_var_conf_handler;
+    cf->handler_conf = conf;
     char *rv = ngx_conf_parse(cf, NULL);
     *cf = save;
-    if (rv != NGX_CONF_OK) return rv;
     return rv;
 }
 
 static ngx_command_t ngx_http_json_var_commands[] = {
-  { .name = ngx_string("json_var"),
-    .type = NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_BLOCK|NGX_CONF_TAKE1,
-    .set = ngx_http_json_var_conf,
-    .conf = 0,
-    .offset = 0,
-    .post = NULL },
+  { ngx_string("json_var"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_BLOCK|NGX_CONF_TAKE1, ngx_http_json_var_conf, NGX_HTTP_LOC_CONF_OFFSET, 0, NULL },
     ngx_null_command
 };
 
@@ -570,6 +558,7 @@ static char *ngx_http_json_var_merge_loc_conf(ngx_conf_t *cf, void *parent, void
     ngx_http_json_var_loc_conf_t *prev = parent;
     ngx_http_json_var_loc_conf_t *conf = child;
     ngx_conf_merge_value(conf->enable, prev->enable, 0);
+    if (!conf->fields) conf->fields = prev->fields;
     return NGX_CONF_OK;
 }
 
