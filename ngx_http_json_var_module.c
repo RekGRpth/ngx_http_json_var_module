@@ -172,11 +172,11 @@ static ngx_array_t *ngx_http_json_var_cookies_array(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_array_t *array = ngx_array_create(r->pool, 1, sizeof(ngx_http_json_var_key_value_t));
     if (!array) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_array_create"); return NULL; }
-    ngx_table_elt_t **elts = r->headers_in.cookies.elts;
-    for (ngx_uint_t i = 0; i < r->headers_in.cookies.nelts; i++) {
-        if (!elts[i]->value.len) continue;
-        ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "elts[%i] = %V:%V", i, &elts[i]->key, &elts[i]->value);
-        for (u_char *start = elts[i]->value.data, *end = elts[i]->value.data + elts[i]->value.len; start < end; ) {
+    ngx_uint_t i = 0;
+    for (ngx_table_elt_t *elt = r->headers_in.cookie; elt; elt = elt->next) {
+        if (!elt->value.len) continue;
+        ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "elts[%i] = %V:%V", i, &elt->key, &elt->value);
+        for (u_char *start = elt->value.data, *end = elt->value.data + elt->value.len; start < end; ) {
             ngx_str_t key;
             for (key.data = start; start < end && *start != '='; start++);
             key.len = start - key.data;
@@ -187,6 +187,7 @@ static ngx_array_t *ngx_http_json_var_cookies_array(ngx_http_request_t *r) {
             value->len = start - value->data;
             start++;
         }
+        i++;
     }
     return array;
 }
