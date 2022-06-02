@@ -179,6 +179,7 @@ static ngx_array_t *ngx_http_json_var_cookies_array(ngx_http_request_t *r) {
         for (u_char *start = elt->value.data, *end = elt->value.data + elt->value.len; start < end; ) {
             ngx_str_t key;
             for (key.data = start; start < end && *start != '='; start++);
+            if (key.data[0] == ' ') key.data++;
             key.len = start - key.data;
             start++;
             ngx_str_t *value = ngx_http_json_var_value(r, array, &key);
