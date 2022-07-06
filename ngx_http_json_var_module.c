@@ -207,6 +207,141 @@ static ngx_int_t ngx_http_json_var_cookies(ngx_http_request_t *r, ngx_http_varia
     return NGX_OK;
 }
 
+static void
+ngx_unescape_uri_patched(u_char **dst, u_char **src, size_t size,
+    ngx_uint_t type)
+{
+    u_char  *d, *s, ch, c, decoded;
+    enum {
+        sw_usual = 0,
+        sw_quoted,
+        sw_quoted_second
+    } state;
+
+    d = *dst;
+    s = *src;
+
+    state = 0;
+    decoded = 0;
+
+    while (size--) {
+
+        ch = *s++;
+
+        switch (state) {
+        case sw_usual:
+            if (ch == '?'
+                && (type & (NGX_UNESCAPE_URI|NGX_UNESCAPE_REDIRECT)))
+            {
+                *d++ = ch;
+                goto done;
+            }
+
+            if (ch == '%') {
+                state = sw_quoted;
+                break;
+            }
+
+            if (ch == '+') {
+                *d++ = ' ';
+                break;
+            }
+
+            *d++ = ch;
+            break;
+
+        case sw_quoted:
+
+            if (ch >= '0' && ch <= '9') {
+                decoded = (u_char) (ch - '0');
+                state = sw_quoted_second;
+                break;
+            }
+
+            c = (u_char) (ch | 0x20);
+            if (c >= 'a' && c <= 'f') {
+                decoded = (u_char) (c - 'a' + 10);
+                state = sw_quoted_second;
+                break;
+            }
+
+            /* the invalid quoted character */
+
+            state = sw_usual;
+
+            *d++ = ch;
+
+            break;
+
+        case sw_quoted_second:
+
+            state = sw_usual;
+
+            if (ch >= '0' && ch <= '9') {
+                ch = (u_char) ((decoded << 4) + (ch - '0'));
+
+                if (type & NGX_UNESCAPE_REDIRECT) {
+                    if (ch > '%' && ch < 0x7f) {
+                        *d++ = ch;
+                        break;
+                    }
+
+                    *d++ = '%'; *d++ = *(s - 2); *d++ = *(s - 1);
+
+                    break;
+                }
+
+                *d++ = ch;
+
+                break;
+            }
+
+            c = (u_char) (ch | 0x20);
+            if (c >= 'a' && c <= 'f') {
+                ch = (u_char) ((decoded << 4) + (c - 'a') + 10);
+
+                if (type & NGX_UNESCAPE_URI) {
+                    if (ch == '?') {
+                        *d++ = ch;
+                        goto done;
+                    }
+
+                    *d++ = ch;
+                    break;
+                }
+
+                if (type & NGX_UNESCAPE_REDIRECT) {
+                    if (ch == '?') {
+                        *d++ = ch;
+                        goto done;
+                    }
+
+                    if (ch > '%' && ch < 0x7f) {
+                        *d++ = ch;
+                        break;
+                    }
+
+                    *d++ = '%'; *d++ = *(s - 2); *d++ = *(s - 1);
+                    break;
+                }
+
+                *d++ = ch;
+
+                break;
+            }
+
+            /* the invalid quoted character */
+
+            break;
+        }
+    }
+
+done:
+
+    *dst = d;
+    *src = s;
+}
+
 static ngx_array_t *ngx_http_json_var_get_vars_array(ngx_http_request_t *r, u_char *start, u_char *end, ngx_array_t *array) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     if (!array && !(array = ngx_array_create(r->pool, 1, sizeof(ngx_http_json_var_key_value_t)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_array_create"); return NULL; }
@@ -220,7 +355,7 @@ static ngx_array_t *ngx_http_json_var_get_vars_array(ngx_http_request_t *r, u_ch
         if (!dst) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NULL; }
         ngx_memcpy(dst, key.data, key.len);
         key.data = dst;
-        ngx_unescape_uri(&dst, &src, key.len, NGX_UNESCAPE_URI);
+        ngx_unescape_uri_patched(&dst, &src, key.len, NGX_UNESCAPE_URI);
         key.len = dst - key.data;
         ngx_str_t *value = ngx_http_json_var_value(r, array, &key);
         if (!value) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_json_var_value"); return NULL; }
@@ -233,7 +368,7 @@ static ngx_array_t *ngx_http_json_var_get_vars_array(ngx_http_request_t *r, u_ch
             if (!dst) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NULL; }
             ngx_memcpy(dst, value->data, value->len);
             value->data = dst;
-            ngx_unescape_uri(&dst, &src, value->len, NGX_UNESCAPE_URI);
+            ngx_unescape_uri_patched(&dst, &src, value->len, NGX_UNESCAPE_URI);
             value->len = dst - value->data;
         }
     }
