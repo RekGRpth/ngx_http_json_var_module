@@ -446,6 +446,93 @@ static ngx_buf_t *ngx_http_json_var_read_request_body_to_buffer(ngx_http_request
     return buf;
 }
 
+#define NGX_HTTP_JSON_VAR_MAX_JSON_DEPTH 256
+
+static u_char *ngx_http_json_var_skip_json_ws(u_char *p, u_char *end) {
+    while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) p++;
+    return p;
+}
+
+static u_char *ngx_http_json_var_parse_json_string(u_char *p, u_char *end) {
+    if (p >= end || *p != '"') return NULL;
+    for (p++; p < end && *p != '"'; p++) {
+        if (*p != '\\') { if (*p < 0x20) return NULL; continue; }
+        if (++p >= end) return NULL;
+        switch (*p) {
+            case '"': case '\\': case '/': case 'b': case 'f': case 'n': case 'r': case 't': break;
+            case 'u':
+                if (end - p < 5) return NULL;
+                for (ngx_uint_t i = 1; i <= 4; i++) { u_char c = p[i]; if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) return NULL; }
+                p += 4;
+                break;
+            default: return NULL;
+        }
+    }
+    return p < end ? p + 1 : NULL;
+}
+
+static u_char *ngx_http_json_var_parse_json_number(u_char *p, u_char *end) {
+    u_char *start = p;
+    if (p < end && *p == '-') p++;
+    if (p >= end || *p < '0' || *p > '9') return NULL;
+    if (*p++ != '0') while (p < end && *p >= '0' && *p <= '9') p++;
+    if (p < end && *p == '.') { p++; if (p >= end || *p < '0' || *p > '9') return NULL; while (p < end && *p >= '0' && *p <= '9') p++; }
+    if (p < end && (*p == 'e' || *p == 'E')) { p++; if (p < end && (*p == '+' || *p == '-')) p++; if (p >= end || *p < '0' || *p > '9') return NULL; while (p < end && *p >= '0' && *p <= '9') p++; }
+    return p == start ? NULL : p;
+}
+
+static u_char *ngx_http_json_var_parse_json_value(u_char *p, u_char *end, ngx_uint_t depth);
+
+static u_char *ngx_http_json_var_parse_json_array(u_char *p, u_char *end, ngx_uint_t depth) {
+    p = ngx_http_json_var_skip_json_ws(p + 1, end);
+    if (p < end && *p == ']') return p + 1;
+    for ( ;; ) {
+        if (!(p = ngx_http_json_var_parse_json_value(p, end, depth + 1))) return NULL;
+        p = ngx_http_json_var_skip_json_ws(p, end);
+        if (p >= end) return NULL;
+        if (*p == ',') { p = ngx_http_json_var_skip_json_ws(p + 1, end); continue; }
+        return *p == ']' ? p + 1 : NULL;
+    }
+}
+
+static u_char *ngx_http_json_var_parse_json_object(u_char *p, u_char *end, ngx_uint_t depth) {
+    p = ngx_http_json_var_skip_json_ws(p + 1, end);
+    if (p < end && *p == '}') return p + 1;
+    for ( ;; ) {
+        if (!(p = ngx_http_json_var_parse_json_string(p, end))) return NULL;
+        p = ngx_http_json_var_skip_json_ws(p, end);
+        if (p >= end || *p != ':') return NULL;
+        p = ngx_http_json_var_skip_json_ws(p + 1, end);
+        if (!(p = ngx_http_json_var_parse_json_value(p, end, depth + 1))) return NULL;
+        p = ngx_http_json_var_skip_json_ws(p, end);
+        if (p >= end) return NULL;
+        if (*p == ',') { p = ngx_http_json_var_skip_json_ws(p + 1, end); continue; }
+        return *p == '}' ? p + 1 : NULL;
+    }
+}
+
+static u_char *ngx_http_json_var_parse_json_value(u_char *p, u_char *end, ngx_uint_t depth) {
+    if (depth > NGX_HTTP_JSON_VAR_MAX_JSON_DEPTH) return NULL;
+    p = ngx_http_json_var_skip_json_ws(p, end);
+    if (p >= end) return NULL;
+    switch (*p) {
+        case '"': return ngx_http_json_var_parse_json_string(p, end);
+        case '{': return ngx_http_json_var_parse_json_object(p, end, depth);
+        case '[': return ngx_http_json_var_parse_json_array(p, end, depth);
+        case 't': return end - p >= 4 && !ngx_strncmp(p, (u_char *)"true", 4) ? p + 4 : NULL;
+        case 'f': return end - p >= 5 && !ngx_strncmp(p, (u_char *)"false", 5) ? p + 5 : NULL;
+        case 'n': return end - p >= 4 && !ngx_strncmp(p, (u_char *)"null", 4) ? p + 4 : NULL;
+        default: return ngx_http_json_var_parse_json_number(p, end);
+    }
+}
+
+static ngx_int_t ngx_http_json_var_is_valid_json(u_char *start, u_char *end) {
+    u_char *p = ngx_http_json_var_parse_json_value(start, end, 0);
+    if (!p) return NGX_ERROR;
+    p = ngx_http_json_var_skip_json_ws(p, end);
+    return p == end ? NGX_OK : NGX_ERROR;
+}
+
 static ngx_int_t ngx_http_json_var_post_vars(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     if (r->headers_in.content_length_n <= 0) { ngx_str_set(v, "null"); return NGX_OK; }
@@ -460,9 +547,14 @@ static ngx_int_t ngx_http_json_var_post_vars(ngx_http_request_t *r, ngx_http_var
         if (!(v->data = ngx_pnalloc(r->pool, v->len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
         if (ngx_http_json_var_array_data(r, array, v->data) != v->data + v->len) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_json_var_array_data != v->data + v->len"); return NGX_ERROR; }
     } else if (r->headers_in.content_type->value.len >= sizeof("application/json") - 1 && !ngx_strncasecmp(r->headers_in.content_type->value.data, (u_char *)"application/json", sizeof("application/json") - 1)) {
-        v->len = ngx_buf_size(buf);
-        if (!(v->data = ngx_pnalloc(r->pool, v->len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
-        if (ngx_copy(v->data, buf->pos, v->len) != v->data + v->len) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_copy != v->data + v->len"); return NGX_ERROR; }
+        if (ngx_http_json_var_is_valid_json(buf->pos, buf->last) != NGX_OK) {
+            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "request body is not valid json despite Content-Type: application/json");
+            ngx_str_set(v, "null");
+        } else {
+            v->len = ngx_buf_size(buf);
+            if (!(v->data = ngx_pnalloc(r->pool, v->len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
+            if (ngx_copy(v->data, buf->pos, v->len) != v->data + v->len) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_copy != v->data + v->len"); return NGX_ERROR; }
+        }
     } else if (r->headers_in.content_type->value.len > sizeof("multipart/form-data") - 1 && !ngx_strncasecmp(r->headers_in.content_type->value.data, (u_char *)"multipart/form-data", sizeof("multipart/form-data") - 1)) {
         if (ngx_strncmp(r->headers_in.content_type->value.data, (u_char *)"multipart/form-data; boundary=", sizeof("multipart/form-data; boundary=") - 1)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_strncmp"); return NGX_ERROR; }
         size_t boundary_len = r->headers_in.content_type->value.len - (sizeof("multipart/form-data; boundary=") - 1);
