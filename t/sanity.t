@@ -105,3 +105,23 @@ Content-Type: application/json
 Content-Type: application/json
 --- response_body chomp
 {"post":null,"marker":"ok"}
+
+
+=== TEST 6: a location without json_post_vars is unaffected by a sibling location that uses it
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /plain {
+        return 200 plain;
+    }
+    location /echo {
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- request
+GET /plain
+--- response_body chomp
+plain
+
