@@ -256,3 +256,33 @@ Content-Type: multipart/form-data; charset=utf-8
 {"post":{}}
 
 
+=== TEST 13: json_cookies trims all leading spaces from a cookie name, not just one
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        return 200 $json_cookies;
+    }
+--- request
+GET /echo
+--- more_headers
+Cookie: a=1;   b=2
+--- response_body chomp
+{"a":"1","b":"2"}
+
+
+=== TEST 14: json_cookies handles a cookie pair with no '=' without corrupting parsing
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        return 200 $json_cookies;
+    }
+--- request
+GET /echo
+--- more_headers
+Cookie: bar=baz; foo
+--- response_body chomp
+{"bar":"baz","foo":""}
+
+
