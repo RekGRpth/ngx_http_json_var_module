@@ -8,7 +8,6 @@ typedef struct {
 
 typedef struct {
     ngx_array_t *fields;
-    ngx_flag_t enable;
     ngx_http_json_var_main_conf_t *hjmc;
 } ngx_http_json_var_loc_conf_t;
 
@@ -621,8 +620,6 @@ static void ngx_http_json_var_post_read(ngx_http_request_t *r) {
 }
 
 static ngx_int_t ngx_http_json_var_handler(ngx_http_request_t *r) {
-    ngx_http_json_var_loc_conf_t *hjlc = ngx_http_get_module_loc_conf(r, ngx_http_json_var_module);
-    if (!hjlc->enable) return NGX_DECLINED;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_json_var_ctx_t *ctx = ngx_http_get_module_ctx(r, ngx_http_json_var_module);
     if (ctx) {
@@ -727,7 +724,6 @@ static char *ngx_http_json_var_conf_handler(ngx_conf_t *cf, ngx_command_t *cmd, 
         || (value.len - 1 == sizeof("json_get_vars") - 1 && !ngx_strncasecmp(value.data + 1, (u_char *)"json_get_vars", sizeof("json_get_vars") - 1))
         || (value.len - 1 == sizeof("json_post_vars") - 1 && !ngx_strncasecmp(value.data + 1, (u_char *)"json_post_vars", sizeof("json_post_vars") - 1)));
     if (value.data[0] == '$' && value.len - 1 == sizeof("json_post_vars") - 1 && !ngx_strncasecmp(value.data + 1, (u_char *)"json_post_vars", sizeof("json_post_vars") - 1)) {
-        hjlc->enable = 1;
         hjlc->hjmc->enable = 1;
     }
     ngx_http_compile_complex_value_t ccv = {cf->ctx, &value, &field->cv, 0, 0, 0};
@@ -772,14 +768,12 @@ static void *ngx_http_json_var_create_main_conf(ngx_conf_t *cf) {
 static void *ngx_http_json_var_create_loc_conf(ngx_conf_t *cf) {
     ngx_http_json_var_loc_conf_t *hjlc = ngx_pcalloc(cf->pool, sizeof(*hjlc));
     if (!hjlc) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "!ngx_pcalloc"); return NULL; }
-    hjlc->enable = NGX_CONF_UNSET;
     return hjlc;
 }
 
 static char *ngx_http_json_var_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_http_json_var_loc_conf_t *prev = parent;
     ngx_http_json_var_loc_conf_t *conf = child;
-    ngx_conf_merge_value(conf->enable, prev->enable, 0);
     if (!conf->fields) conf->fields = prev->fields;
     return NGX_CONF_OK;
 }

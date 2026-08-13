@@ -286,3 +286,25 @@ Cookie: bar=baz; foo
 {"bar":"baz","foo":""}
 
 
+=== TEST 15: $json_post_vars used directly (outside json_var) still sees the body when json_var uses it elsewhere in the http block
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /direct {
+        return 200 $json_post_vars;
+    }
+    location /viajsonvar {
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- request eval
+'POST /direct
+' . '{"a":1}'
+--- more_headers
+Content-Type: application/json
+--- response_body eval
+'{"a":1}'
+
+
