@@ -145,3 +145,23 @@ Content-Type: application/json
 --- response_body eval
 '{"post":{"a":1,"b":"' . ('x' x 4000) . '"}}'
 
+
+=== TEST 8: json_post_vars parses application/x-www-form-urlencoded with a trailing charset parameter
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- request
+POST /echo
+foo=bar&baz=qux
+--- more_headers
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+--- response_body chomp
+{"post":{"foo":"bar","baz":"qux"}}
+
+

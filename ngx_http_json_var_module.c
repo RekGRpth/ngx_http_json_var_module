@@ -538,7 +538,7 @@ static ngx_int_t ngx_http_json_var_post_vars(ngx_http_request_t *r, ngx_http_var
     ngx_buf_t *buf = ngx_http_json_var_read_request_body_to_buffer(r);
     if (!buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_json_var_read_request_body_to_buffer"); return NGX_ERROR; }
     if (!r->headers_in.content_type) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!r->headers_in.content_type"); return NGX_ERROR; }
-    if (r->headers_in.content_type->value.len == sizeof("application/x-www-form-urlencoded") - 1 && !ngx_strncasecmp(r->headers_in.content_type->value.data, (u_char *)"application/x-www-form-urlencoded", sizeof("application/x-www-form-urlencoded") - 1)) {
+    if (r->headers_in.content_type->value.len >= sizeof("application/x-www-form-urlencoded") - 1 && !ngx_strncasecmp(r->headers_in.content_type->value.data, (u_char *)"application/x-www-form-urlencoded", sizeof("application/x-www-form-urlencoded") - 1)) {
         ngx_array_t *array = ngx_http_json_var_get_vars_array(r, buf->pos, buf->last, NULL);
         if (!array) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_json_var_get_vars_array"); return NGX_ERROR; }
         if (!(v->len = ngx_http_json_var_array_len(r, array))) { ngx_str_set(v, "null"); return NGX_OK; }
