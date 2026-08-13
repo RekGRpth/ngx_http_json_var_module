@@ -308,3 +308,90 @@ Content-Type: application/json
 '{"a":1}'
 
 
+=== TEST 16: json_headers dumps request headers as json
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        return 200 $json_headers;
+    }
+--- request
+GET /echo
+--- more_headers
+X-Custom: myvalue
+--- response_body_like: "Host":"[^"]+".*"X-Custom":"myvalue"
+
+
+=== TEST 17: json_headers renders a repeated request header as a json array
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        return 200 $json_headers;
+    }
+--- request
+GET /echo
+--- more_headers
+X-Dup: 1
+X-Dup: 2
+--- response_body_like: "X-Dup":\["1","2"\]
+
+
+=== TEST 18: json_response_headers dumps response headers already set earlier in the same filter chain
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        add_header X-Test myvalue always;
+        add_header X-Log $json_response_headers always;
+        return 200 ok;
+    }
+--- request
+GET /echo
+--- response_headers_like
+X-Log: ^\{"X-Test":"myvalue","Date":"[^"]+","Content-Type":"text/plain"\}$
+
+
+=== TEST 19: json_get_vars url-decodes query string values and handles a bare key
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        return 200 $json_get_vars;
+    }
+--- request
+GET /echo?a=hello%20world&b=x+y&c=%3D&bare
+--- response_body chomp
+{"a":"hello world","b":"x y","c":"=","bare":null}
+
+
+=== TEST 20: json_get_vars renders a repeated query parameter as a json array
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        return 200 $json_get_vars;
+    }
+--- request
+GET /echo?a=1&a=2
+--- response_body chomp
+{"a":["1","2"]}
+
+
+=== TEST 21: json_var embeds $json_headers raw, not just json_post_vars
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var $log {
+            h $json_headers;
+        }
+        return 200 $log;
+    }
+--- request
+GET /echo
+--- more_headers
+X-Custom: myvalue
+--- response_body_like: ^\{"h":\{"Host":"[^"]+".*"X-Custom":"myvalue".*\}\}$
+
+
