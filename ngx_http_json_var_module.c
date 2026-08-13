@@ -687,8 +687,7 @@ static u_char *ngx_http_json_var_data(ngx_http_request_t *r, u_char *p, ngx_arra
         *p++ = ':';
         if (args[i].json) p = ngx_copy(p, value.data, value.len); else {
             *p++ = '"';
-            if (args[i].json) p = ngx_copy(p, value.data, value.len);
-            else p = (u_char *)ngx_escape_json(p, value.data, value.len);
+            p = (u_char *)ngx_escape_json(p, value.data, value.len);
             *p++ = '"';
         }
     }
