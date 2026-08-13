@@ -652,22 +652,22 @@ static ngx_int_t ngx_http_json_var_postconfiguration(ngx_conf_t *cf) {
     return NGX_OK;
 }
 
-static size_t ngx_http_json_var_len(ngx_http_request_t *r, ngx_array_t *fields) {
+static ngx_int_t ngx_http_json_var_len(ngx_http_request_t *r, ngx_array_t *fields, size_t *len) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    size_t len = 0;
+    *len = 0;
     ngx_http_json_var_field_t *args = fields->elts;
     for (ngx_uint_t i = 0; i < fields->nelts; i++) {
         if (!args[i].name.len) continue;
         ngx_str_t value;
         if (ngx_http_complex_value(r, &args[i].cv, &value) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); return NGX_ERROR; }
         if (!value.len) continue;
-        if (len) len++;
-        len += sizeof("\"\":") - 1 + args[i].name.len;
-        if (args[i].json) len += value.len;
-        else len += sizeof("\"\"") - 1 + value.len + ngx_escape_json(NULL, value.data, value.len);
+        if (*len) (*len)++;
+        *len += sizeof("\"\":") - 1 + args[i].name.len;
+        if (args[i].json) *len += value.len;
+        else *len += sizeof("\"\"") - 1 + value.len + ngx_escape_json(NULL, value.data, value.len);
     }
-    len += sizeof("{}") - 1;
-    return len;
+    *len += sizeof("{}") - 1;
+    return NGX_OK;
 }
 
 static u_char *ngx_http_json_var_data(ngx_http_request_t *r, u_char *p, ngx_array_t *fields) {
@@ -703,7 +703,9 @@ static ngx_int_t ngx_http_json_var_get_handler(ngx_http_request_t *r, ngx_http_v
     ngx_array_t *fields = hjlc->fields;
     if (!fields) { ngx_str_set(v, "null"); return NGX_OK; }
     if (!fields->nelts) { ngx_str_set(v, "{}"); return NGX_OK; }
-    v->len = ngx_http_json_var_len(r, fields);
+    size_t len;
+    if (ngx_http_json_var_len(r, fields, &len) != NGX_OK) return NGX_ERROR;
+    v->len = len;
     if (!(v->data = ngx_pnalloc(r->pool, v->len))){ ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
     if (ngx_http_json_var_data(r, v->data, fields) != v->data + v->len) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_json_var_data != v->data + v->len"); return NGX_ERROR; }
     v->valid = 1;
