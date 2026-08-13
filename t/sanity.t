@@ -13,7 +13,7 @@ __DATA__
 
 === TEST 1: json_var embeds a well-formed application/json post body raw, without escaping it
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -32,7 +32,7 @@ Content-Type: application/json
 
 === TEST 2: json_post_vars is null when the body is not valid JSON despite the Content-Type
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -51,7 +51,7 @@ Content-Type: application/json
 
 === TEST 3: json_post_vars is null for a body engineered to break out of a surrounding JSON structure
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -70,7 +70,7 @@ Content-Type: application/json
 
 === TEST 4: json_post_vars is null for a valid JSON value followed by trailing garbage
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -89,7 +89,7 @@ Content-Type: application/json
 
 === TEST 5: an injection attempt cannot inject a sibling key into the surrounding json_var output
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -109,7 +109,7 @@ Content-Type: application/json
 
 === TEST 6: a location without json_post_vars is unaffected by a sibling location that uses it
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /plain {
         return 200 plain;
@@ -128,7 +128,7 @@ plain
 
 === TEST 7: a file-backed post body survives json_post_vars being evaluated twice (json_var's length + data passes)
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         client_body_buffer_size 1;
@@ -148,7 +148,7 @@ Content-Type: application/json
 
 === TEST 8: json_post_vars parses application/x-www-form-urlencoded with a trailing charset parameter
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -167,7 +167,7 @@ Content-Type: application/x-www-form-urlencoded; charset=UTF-8
 
 === TEST 9: json_post_vars parses a standard multipart/form-data body
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -194,7 +194,7 @@ Content-Type: multipart/form-data; boundary=TESTBOUNDARY123
 
 === TEST 10: json_post_vars accepts a boundary parameter with no space after the semicolon
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -217,7 +217,7 @@ Content-Type: multipart/form-data;boundary=TESTBOUNDARY123
 
 === TEST 11: json_post_vars accepts a quoted boundary value
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -240,7 +240,7 @@ Content-Type: multipart/form-data; boundary="TESTBOUNDARY123"
 
 === TEST 12: json_post_vars falls back to {} instead of erroring when multipart/form-data has no boundary parameter
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -258,7 +258,7 @@ Content-Type: multipart/form-data; charset=utf-8
 
 === TEST 13: json_cookies trims all leading spaces from a cookie name, not just one
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         return 200 $json_cookies;
@@ -273,7 +273,7 @@ Cookie: a=1;   b=2
 
 === TEST 14: json_cookies handles a cookie pair with no '=' without corrupting parsing
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         return 200 $json_cookies;
@@ -288,7 +288,7 @@ Cookie: bar=baz; foo
 
 === TEST 15: $json_post_vars used directly (outside json_var) still sees the body when json_var uses it elsewhere in the http block
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /direct {
         return 200 $json_post_vars;
@@ -310,7 +310,7 @@ Content-Type: application/json
 
 === TEST 16: json_headers dumps request headers as json
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         return 200 $json_headers;
@@ -324,7 +324,7 @@ X-Custom: myvalue
 
 === TEST 17: json_headers renders a repeated request header as a json array
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         return 200 $json_headers;
@@ -339,7 +339,7 @@ X-Dup: 2
 
 === TEST 18: json_response_headers dumps response headers already set earlier in the same filter chain
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         add_header X-Test myvalue always;
@@ -354,7 +354,7 @@ X-Log: ^\{"X-Test":"myvalue","Date":"[^"]+","Content-Type":"text/plain"\}$
 
 === TEST 19: json_get_vars url-decodes query string values and handles a bare key
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         return 200 $json_get_vars;
@@ -367,7 +367,7 @@ GET /echo?a=hello%20world&b=x+y&c=%3D&bare
 
 === TEST 20: json_get_vars renders a repeated query parameter as a json array
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         return 200 $json_get_vars;
@@ -380,7 +380,7 @@ GET /echo?a=1&a=2
 
 === TEST 21: json_var embeds $json_headers raw, not just json_post_vars
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -397,7 +397,7 @@ X-Custom: myvalue
 
 === TEST 22: json_post_vars is null for a zero-length body
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -417,7 +417,7 @@ Content-Length: 0
 
 === TEST 23: json_post_vars falls back to {} for an unsupported Content-Type
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -436,7 +436,7 @@ Content-Type: text/plain
 
 === TEST 24: json_post_vars parses a multipart field with extra Content-Disposition parameters
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
@@ -460,7 +460,7 @@ Content-Type: multipart/form-data; boundary=TESTBOUNDARY123
 
 === TEST 25: json_var rejects a second block for the same location
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log1 { a b; }
@@ -476,7 +476,7 @@ is duplicate
 
 === TEST 26: json_var rejects a variable name without a leading $
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var log { a b; }
@@ -491,7 +491,7 @@ invalid variable name
 
 === TEST 27: a nested location without its own json_var inherits the parent's fields
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /outer {
         json_var $log {
@@ -509,7 +509,7 @@ GET /outer/inner
 
 === TEST 28: json_post_vars correctly assembles a body that arrives across two reads
 --- main_config
-    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
 --- config
     location /echo {
         json_var $log {
