@@ -531,3 +531,22 @@ Connection: close\r
 {"post":{"a":1,"b":22222222}}
 
 
+=== TEST 29: json_post_vars validates deeply nested JSON without crashing the worker
+--- main_config
+    load_module /etc/nginx/modules/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- request eval
+'POST /echo
+' . ('[' x 10000) . (']' x 10000)
+--- more_headers
+Content-Type: application/json
+--- response_body eval
+'{"post":' . ('[' x 10000) . (']' x 10000) . '}'
+
+

@@ -444,8 +444,6 @@ static ngx_buf_t *ngx_http_json_var_read_request_body_to_buffer(ngx_http_request
     return buf;
 }
 
-#define NGX_HTTP_JSON_VAR_MAX_JSON_DEPTH 256
-
 static u_char *ngx_http_json_var_skip_json_ws(u_char *p, u_char *end) {
     while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) p++;
     return p;
@@ -479,56 +477,78 @@ static u_char *ngx_http_json_var_parse_json_number(u_char *p, u_char *end) {
     return p == start ? NULL : p;
 }
 
-static u_char *ngx_http_json_var_parse_json_value(u_char *p, u_char *end, ngx_uint_t depth);
-
-static u_char *ngx_http_json_var_parse_json_array(u_char *p, u_char *end, ngx_uint_t depth) {
-    p = ngx_http_json_var_skip_json_ws(p + 1, end);
-    if (p < end && *p == ']') return p + 1;
+/*
+ * Iterative (non-recursive) validation: depth is bounded by an explicit
+ * stack sized to the input length, not by C call-stack recursion, so
+ * deeply nested input fails a bounds check instead of exhausting the
+ * stack.
+ */
+static ngx_int_t ngx_http_json_var_is_valid_json(ngx_http_request_t *r, u_char *start, u_char *end) {
+    enum { JV_VALUE, JV_OBJ_KEY, JV_OBJ_COLON, JV_OBJ_NEXT, JV_ARR_NEXT } state;
+    if (start >= end) return NGX_ERROR;
+    u_char *stack = ngx_pnalloc(r->pool, end - start);
+    if (!stack) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
+    size_t depth = 0;
+    u_char *p = start;
+    state = JV_VALUE;
     for ( ;; ) {
-        if (!(p = ngx_http_json_var_parse_json_value(p, end, depth + 1))) return NULL;
         p = ngx_http_json_var_skip_json_ws(p, end);
-        if (p >= end) return NULL;
-        if (*p == ',') { p = ngx_http_json_var_skip_json_ws(p + 1, end); continue; }
-        return *p == ']' ? p + 1 : NULL;
+        switch (state) {
+            case JV_VALUE:
+                if (p >= end) return NGX_ERROR;
+                switch (*p) {
+                    case '"':
+                        if (!(p = ngx_http_json_var_parse_json_string(p, end))) return NGX_ERROR;
+                        break;
+                    case '{':
+                        p = ngx_http_json_var_skip_json_ws(p + 1, end);
+                        if (p < end && *p == '}') { p++; break; }
+                        stack[depth++] = '{';
+                        state = JV_OBJ_KEY;
+                        continue;
+                    case '[':
+                        p = ngx_http_json_var_skip_json_ws(p + 1, end);
+                        if (p < end && *p == ']') { p++; break; }
+                        stack[depth++] = '[';
+                        continue;
+                    case 't': if (end - p >= 4 && !ngx_strncmp(p, (u_char *)"true", 4)) { p += 4; break; } return NGX_ERROR;
+                    case 'f': if (end - p >= 5 && !ngx_strncmp(p, (u_char *)"false", 5)) { p += 5; break; } return NGX_ERROR;
+                    case 'n': if (end - p >= 4 && !ngx_strncmp(p, (u_char *)"null", 4)) { p += 4; break; } return NGX_ERROR;
+                    default:
+                        if (!(p = ngx_http_json_var_parse_json_number(p, end))) return NGX_ERROR;
+                }
+                if (!depth) { p = ngx_http_json_var_skip_json_ws(p, end); return p == end ? NGX_OK : NGX_ERROR; }
+                state = stack[depth - 1] == '{' ? JV_OBJ_NEXT : JV_ARR_NEXT;
+                continue;
+            case JV_OBJ_KEY:
+                if (!(p = ngx_http_json_var_parse_json_string(p, end))) return NGX_ERROR;
+                state = JV_OBJ_COLON;
+                continue;
+            case JV_OBJ_COLON:
+                if (p >= end || *p != ':') return NGX_ERROR;
+                p = ngx_http_json_var_skip_json_ws(p + 1, end);
+                state = JV_VALUE;
+                continue;
+            case JV_OBJ_NEXT:
+                if (p >= end) return NGX_ERROR;
+                if (*p == ',') { p = ngx_http_json_var_skip_json_ws(p + 1, end); state = JV_OBJ_KEY; continue; }
+                if (*p != '}') return NGX_ERROR;
+                p++;
+                depth--;
+                if (!depth) { p = ngx_http_json_var_skip_json_ws(p, end); return p == end ? NGX_OK : NGX_ERROR; }
+                state = stack[depth - 1] == '{' ? JV_OBJ_NEXT : JV_ARR_NEXT;
+                continue;
+            case JV_ARR_NEXT:
+                if (p >= end) return NGX_ERROR;
+                if (*p == ',') { p = ngx_http_json_var_skip_json_ws(p + 1, end); state = JV_VALUE; continue; }
+                if (*p != ']') return NGX_ERROR;
+                p++;
+                depth--;
+                if (!depth) { p = ngx_http_json_var_skip_json_ws(p, end); return p == end ? NGX_OK : NGX_ERROR; }
+                state = stack[depth - 1] == '{' ? JV_OBJ_NEXT : JV_ARR_NEXT;
+                continue;
+        }
     }
-}
-
-static u_char *ngx_http_json_var_parse_json_object(u_char *p, u_char *end, ngx_uint_t depth) {
-    p = ngx_http_json_var_skip_json_ws(p + 1, end);
-    if (p < end && *p == '}') return p + 1;
-    for ( ;; ) {
-        if (!(p = ngx_http_json_var_parse_json_string(p, end))) return NULL;
-        p = ngx_http_json_var_skip_json_ws(p, end);
-        if (p >= end || *p != ':') return NULL;
-        p = ngx_http_json_var_skip_json_ws(p + 1, end);
-        if (!(p = ngx_http_json_var_parse_json_value(p, end, depth + 1))) return NULL;
-        p = ngx_http_json_var_skip_json_ws(p, end);
-        if (p >= end) return NULL;
-        if (*p == ',') { p = ngx_http_json_var_skip_json_ws(p + 1, end); continue; }
-        return *p == '}' ? p + 1 : NULL;
-    }
-}
-
-static u_char *ngx_http_json_var_parse_json_value(u_char *p, u_char *end, ngx_uint_t depth) {
-    if (depth > NGX_HTTP_JSON_VAR_MAX_JSON_DEPTH) return NULL;
-    p = ngx_http_json_var_skip_json_ws(p, end);
-    if (p >= end) return NULL;
-    switch (*p) {
-        case '"': return ngx_http_json_var_parse_json_string(p, end);
-        case '{': return ngx_http_json_var_parse_json_object(p, end, depth);
-        case '[': return ngx_http_json_var_parse_json_array(p, end, depth);
-        case 't': return end - p >= 4 && !ngx_strncmp(p, (u_char *)"true", 4) ? p + 4 : NULL;
-        case 'f': return end - p >= 5 && !ngx_strncmp(p, (u_char *)"false", 5) ? p + 5 : NULL;
-        case 'n': return end - p >= 4 && !ngx_strncmp(p, (u_char *)"null", 4) ? p + 4 : NULL;
-        default: return ngx_http_json_var_parse_json_number(p, end);
-    }
-}
-
-static ngx_int_t ngx_http_json_var_is_valid_json(u_char *start, u_char *end) {
-    u_char *p = ngx_http_json_var_parse_json_value(start, end, 0);
-    if (!p) return NGX_ERROR;
-    p = ngx_http_json_var_skip_json_ws(p, end);
-    return p == end ? NGX_OK : NGX_ERROR;
 }
 
 static ngx_int_t ngx_http_json_var_multipart_boundary(ngx_str_t *content_type, ngx_str_t *boundary) {
@@ -558,7 +578,7 @@ static ngx_int_t ngx_http_json_var_post_vars(ngx_http_request_t *r, ngx_http_var
         if (!(v->data = ngx_pnalloc(r->pool, v->len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
         if (ngx_http_json_var_array_data(r, array, v->data) != v->data + v->len) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_json_var_array_data != v->data + v->len"); return NGX_ERROR; }
     } else if (r->headers_in.content_type->value.len >= sizeof("application/json") - 1 && !ngx_strncasecmp(r->headers_in.content_type->value.data, (u_char *)"application/json", sizeof("application/json") - 1)) {
-        if (ngx_http_json_var_is_valid_json(buf->pos, buf->last) != NGX_OK) {
+        if (ngx_http_json_var_is_valid_json(r, buf->pos, buf->last) != NGX_OK) {
             ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "request body is not valid json despite Content-Type: application/json");
             ngx_str_set(v, "null");
         } else {
