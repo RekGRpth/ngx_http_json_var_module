@@ -396,7 +396,7 @@ static ngx_array_t *ngx_http_json_var_post_vars_array(ngx_http_request_t *r, ngx
     for (u_char *val; start < end; start += 2) {
         if (ngx_strncmp(start, boundary->data + 2, boundary->len - 2)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_strncmp"); return NULL; }
         start += boundary->len - 2;
-        if (ngx_strncmp(start, (u_char *)"\r\nContent-Disposition: form-data; name=\"=", sizeof("\r\nContent-Disposition: form-data; name=\"") - 1)) break;
+        if (ngx_strncmp(start, (u_char *)"\r\nContent-Disposition: form-data; name=\"", sizeof("\r\nContent-Disposition: form-data; name=\"") - 1)) break;
         start += sizeof("\r\nContent-Disposition: form-data; name=\"") - 1;
         ngx_str_t key;
         if ((val = ngx_strstrn(start, "\";", sizeof("\";") - 1 - 1))) {
