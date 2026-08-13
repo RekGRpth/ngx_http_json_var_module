@@ -437,8 +437,6 @@ static ngx_buf_t *ngx_http_json_var_read_request_body_to_buffer(ngx_http_request
             ssize_t n = ngx_read_file(chain->buf->file, buf->start, len, 0);
             if (n == NGX_FILE_ERROR) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_read_file == NGX_FILE_ERROR"); return NULL; }
             buf->last = buf->last + len;
-            ngx_delete_file(chain->buf->file->name.data);
-            chain->buf->file->fd = NGX_INVALID_FILE;
         } else {
             buf->last = ngx_copy(buf->start, chain->buf->pos, len);
         }

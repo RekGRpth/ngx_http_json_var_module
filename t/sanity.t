@@ -125,3 +125,23 @@ GET /plain
 --- response_body chomp
 plain
 
+
+=== TEST 7: a file-backed post body survives json_post_vars being evaluated twice (json_var's length + data passes)
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        client_body_buffer_size 1;
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- request eval
+'POST /echo
+' . '{"a":1,"b":"' . ('x' x 4000) . '"}'
+--- more_headers
+Content-Type: application/json
+--- response_body eval
+'{"post":{"a":1,"b":"' . ('x' x 4000) . '"}}'
+
