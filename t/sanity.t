@@ -395,3 +395,139 @@ X-Custom: myvalue
 --- response_body_like: ^\{"h":\{"Host":"[^"]+".*"X-Custom":"myvalue".*\}\}$
 
 
+=== TEST 22: json_post_vars is null for a zero-length body
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- request eval
+'POST /echo
+'
+--- more_headers
+Content-Type: application/json
+Content-Length: 0
+--- response_body chomp
+{"post":null}
+
+
+=== TEST 23: json_post_vars falls back to {} for an unsupported Content-Type
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- request eval
+'POST /echo
+' . 'hello'
+--- more_headers
+Content-Type: text/plain
+--- response_body chomp
+{"post":{}}
+
+
+=== TEST 24: json_post_vars parses a multipart field with extra Content-Disposition parameters
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- request eval
+"POST /echo\n" .
+"--TESTBOUNDARY123\r\n" .
+"Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n" .
+"Content-Type: text/plain\r\n" .
+"\r\n" .
+"filecontent\r\n" .
+"--TESTBOUNDARY123--\r\n"
+--- more_headers
+Content-Type: multipart/form-data; boundary=TESTBOUNDARY123
+--- response_body chomp
+{"post":{"file":"filecontent"}}
+
+
+=== TEST 25: json_var rejects a second block for the same location
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var $log1 { a b; }
+        json_var $log2 { c d; }
+        return 200 ok;
+    }
+--- request
+GET /echo
+--- must_die
+--- error_log
+is duplicate
+
+
+=== TEST 26: json_var rejects a variable name without a leading $
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var log { a b; }
+        return 200 ok;
+    }
+--- request
+GET /echo
+--- must_die
+--- error_log
+invalid variable name
+
+
+=== TEST 27: a nested location without its own json_var inherits the parent's fields
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /outer {
+        json_var $log {
+            a hello;
+        }
+        location /outer/inner {
+            return 200 $log;
+        }
+    }
+--- request
+GET /outer/inner
+--- response_body chomp
+{"a":"hello"}
+
+
+=== TEST 28: json_post_vars correctly assembles a body that arrives across two reads
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- raw_request eval
+["POST /echo HTTP/1.1\r
+Host: localhost\r
+Content-Type: application/json\r
+Content-Length: 20\r
+Connection: close\r
+\r
+{\"a\":1,\"b\":",
+"22222222}"]
+--- raw_request_middle_delay: 0.5
+--- response_body chomp
+{"post":{"a":1,"b":22222222}}
+
+
