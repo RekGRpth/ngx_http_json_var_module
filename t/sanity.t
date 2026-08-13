@@ -165,3 +165,94 @@ Content-Type: application/x-www-form-urlencoded; charset=UTF-8
 {"post":{"foo":"bar","baz":"qux"}}
 
 
+=== TEST 9: json_post_vars parses a standard multipart/form-data body
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- request eval
+"POST /echo\n" .
+"--TESTBOUNDARY123\r\n" .
+"Content-Disposition: form-data; name=\"foo\"\r\n" .
+"\r\n" .
+"bar\r\n" .
+"--TESTBOUNDARY123\r\n" .
+"Content-Disposition: form-data; name=\"baz\"\r\n" .
+"\r\n" .
+"qux\r\n" .
+"--TESTBOUNDARY123--\r\n"
+--- more_headers
+Content-Type: multipart/form-data; boundary=TESTBOUNDARY123
+--- response_body chomp
+{"post":{"foo":"bar","baz":"qux"}}
+
+
+=== TEST 10: json_post_vars accepts a boundary parameter with no space after the semicolon
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- request eval
+"POST /echo\n" .
+"--TESTBOUNDARY123\r\n" .
+"Content-Disposition: form-data; name=\"foo\"\r\n" .
+"\r\n" .
+"bar\r\n" .
+"--TESTBOUNDARY123--\r\n"
+--- more_headers
+Content-Type: multipart/form-data;boundary=TESTBOUNDARY123
+--- response_body chomp
+{"post":{"foo":"bar"}}
+
+
+=== TEST 11: json_post_vars accepts a quoted boundary value
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- request eval
+"POST /echo\n" .
+"--TESTBOUNDARY123\r\n" .
+"Content-Disposition: form-data; name=\"foo\"\r\n" .
+"\r\n" .
+"bar\r\n" .
+"--TESTBOUNDARY123--\r\n"
+--- more_headers
+Content-Type: multipart/form-data; boundary="TESTBOUNDARY123"
+--- response_body chomp
+{"post":{"foo":"bar"}}
+
+
+=== TEST 12: json_post_vars falls back to {} instead of erroring when multipart/form-data has no boundary parameter
+--- main_config
+    load_module /usr/local/lib/nginx/ngx_http_json_var_module.so;
+--- config
+    location /echo {
+        json_var $log {
+            post $json_post_vars;
+        }
+        return 200 $log;
+    }
+--- request eval
+"POST /echo\n" . "irrelevant body"
+--- more_headers
+Content-Type: multipart/form-data; charset=utf-8
+--- response_body chomp
+{"post":{}}
+
+
